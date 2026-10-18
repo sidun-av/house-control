@@ -15,6 +15,28 @@ export function hostBase({ boot, search }) {
 
 const fail = (message, code) => Object.assign(new Error(message), { code });
 
+// A proxy that compresses the answer may turn a strong ETag into a weak one (`W/"…"`):
+// the version is the same, so the two are compared without it.
+export const sameVersion = (a, b) => String(a).replace(/^W\//, '') === String(b).replace(/^W\//, '');
+
+const RELOADED = 'house-control:reloaded-for';
+
+/**
+ * Reloads the page for a new plan version, once per version in this tab: if the page comes
+ * back still out of step (a version that never matches), it stays as it is rather than
+ * reloading again and again. Without session storage it does not reload at all.
+ */
+export function reloadOnce(version, { storage, reload }) {
+  try {
+    if (storage.getItem(RELOADED) === version) return false;
+    storage.setItem(RELOADED, version);
+  } catch {
+    return false;
+  }
+  reload();
+  return true;
+}
+
 export function createRemoteHost({
   base, fetch, setTimeout, clearTimeout, interval = 10000, onState = null, onOffline = null, onPlanChanged = null,
 }) {
@@ -26,6 +48,7 @@ export function createRemoteHost({
   const soon = new Set();
   let asked = 0; // polls started, so an answer older than one already used is dropped
   let used = 0;
+  let floor = 0; // the last poll asked before the latest command: its answer may predate it
 
   const host = {
     // Assignable after creation: the panel that shows what they report is built later.
@@ -37,7 +60,12 @@ export function createRemoteHost({
       const res = await fetch(`${base}/plan`, { cache: 'no-store' });
       if (res.status === 404) throw fail(t('host.noPlan.title'), 'no_plan');
       if (!res.ok) throw fail(`HTTP ${res.status}`, 'unavailable');
-      const raw = await res.json();
+      let raw;
+      try {
+        raw = await res.json();
+      } catch (error) {
+        throw fail(`The plan is not valid JSON: ${error.message}`, 'bad_plan');
+      }
       version = res.headers.get('ETag');
       return { raw, version };
     },
@@ -45,6 +73,8 @@ export function createRemoteHost({
     async command({ kind, id, patch, state }) {
       let res = null;
       let body = null;
+      // A state answer asked for before this command may still show the device as it was.
+      floor = asked;
       try {
         res = await fetch(`${base}/command`, {
           method: 'POST',
@@ -56,8 +86,11 @@ export function createRemoteHost({
       // Whatever happened, the device's own report settles it shortly.
       host.refreshSoon(kind);
       if (res?.ok) return { ok: true };
+      // A host applies nothing of a command it refuses, so the whole change goes back
+      // (`failed` = null); the keys it named are kept in `refused`.
+      const refused = Array.isArray(body?.failed) ? body.failed : null;
       throw Object.assign(new Error(t('host.commandFailed')), {
-        detail: { failed: Array.isArray(body?.failed) ? body.failed : null, code: body?.error || null },
+        detail: { failed: null, refused, code: body?.error || null },
       });
     },
 
@@ -69,17 +102,17 @@ export function createRemoteHost({
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         json = await res.json();
       } catch {
-        if (mine < used) return;
+        if (mine < used || mine <= floor) return;
         used = mine;
         setOffline(true);
         return;
       }
-      if (mine < used) return;
+      if (mine < used || mine <= floor) return;
       used = mine;
       setOffline(false);
-      if (json?.planVersion && version && json.planVersion !== version && !planChanged) {
+      if (json?.planVersion && version && !sameVersion(json.planVersion, version) && !planChanged) {
         planChanged = true;
-        host.onPlanChanged?.();
+        host.onPlanChanged?.(String(json.planVersion).replace(/^W\//, ''));
       }
       host.onState?.(json);
     },
