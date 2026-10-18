@@ -17,6 +17,12 @@ What changed in each release of House Control. The Mac app is on
   on older integrations. A robot Home Assistant cannot reach says so and stands still.
 - The editors place, move, link and remove it; AI Access lists it and gets a `control_vacuums` tool and action links.
 
+### Panel in a browser
+
+- **Russian.** The panel follows the browser's language, or `?lang=` / the boot config's `lang`; the Mac app stays
+  English unless told otherwise. Numbers are written the local way (22,5°), and the suction levels robots commonly
+  report are translated too. Room, device and scene names come from your plan as they are.
+
 ### Mac
 
 - **Open at Login**, in the menu bar icon's right-click menu and in the panel's gear menu: House Control starts with
