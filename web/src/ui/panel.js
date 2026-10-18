@@ -641,8 +641,9 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
 
     homeSub.replaceChildren(
       h('span.live', { style: anyOn ? {} : { background: 'rgba(255,255,255,.25)', boxShadow: 'none' } }),
-      ...rich(onCount ? t('panel.lightsOnCount', { n: onCount, total: lights.length }) : t('panel.noLightsOn')),
-      acsOn.length ? ` · ${t('panel.acTarget', { target: num(acsOn[0].target) })}` : '');
+      // One line that is cut short rather than wrapped: a translation can be longer than the room for it.
+      h('span.home-line', ...rich(onCount ? t('panel.lightsOnCount', { n: onCount, total: lights.length }) : t('panel.noLightsOn')),
+        acsOn.length ? ` · ${t('panel.acTarget', { target: num(acsOn[0].target) })}` : ''));
     power.classList.toggle('on', anyOn);
 
     for (const [id, b] of sceneButtons) b.classList.toggle('active', state.scene === id);

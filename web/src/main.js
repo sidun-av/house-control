@@ -19,6 +19,7 @@ const app = document.getElementById('app');
 document.documentElement.lang = i18n.lang;
 if (isNative) document.documentElement.classList.add('native');
 if (isHosted) document.documentElement.classList.add('hosted');
+if (window.__HOUSE_BOOT__?.embed || new URLSearchParams(location.search).get('embed') === '1') document.documentElement.classList.add('embed');
 if (isPhone) document.documentElement.classList.add('ios');
 
 // ?safeTop=62&safeBottom=34 stands in for a phone's safe areas when its layout is looked at in a browser.
@@ -40,7 +41,7 @@ function fatal(title, error, body = t('fatal.planBody')) {
   console.error(error);
   app.replaceChildren(h('div.fatal', h('h1', title),
     body,
-    h('code', String(error?.code || error?.message || error))));
+    error?.code === 'no_plan' ? null : h('code', String(error?.code || error?.message || error))));
   post('ready', { error: String(error?.message || error) });
 }
 

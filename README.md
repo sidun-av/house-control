@@ -378,6 +378,11 @@ Then open `http://localhost:5199/`. Add `?plan=studio` for the second demo plan,
 `?mode=island` for the island, `?mode=agent` for the AI Access window (with a simulated link), `?platform=ios` for the iPhone layout, or `?device=living.ac` to start on a
 device's sheet. Set `PORT` to use another port.
 
+A server that owns real devices can also drive the panel in a browser — on a dashboard, say — over three HTTP
+endpoints (plan, state, command), with `?lang=ru` for Russian and an embedded layout for an iframe. See
+[docs/remote-host.md](docs/remote-host.md); `node web/scripts/mock-host.mjs` is a stand-in host for development, and
+`npm test` in `web` runs the panel's unit tests.
+
 Environment variables understood by the app:
 
 | Variable | Effect |

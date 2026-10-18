@@ -22,6 +22,11 @@ What changed in each release of House Control. The Mac app is on
 - **Russian.** The panel follows the browser's language, or `?lang=` / the boot config's `lang`; the Mac app stays
   English unless told otherwise. Numbers are written the local way (22,5°), and the suction levels robots commonly
   report are translated too. Room, device and scene names come from your plan as they are.
+- **Remote host.** With `host` in the boot config or `?host=`, a page outside the apps is driven by a server that
+  owns the devices: it loads the plan from `<host>/plan`, polls `<host>/state` while visible and sends changes to
+  `<host>/command`; a refused change rolls back, a lost host shows one "no connection" message, and a new plan
+  reloads the page. `embed` makes the card fill an iframe. See [docs/remote-host.md](docs/remote-host.md), with a
+  mock host for development.
 
 ### Mac
 

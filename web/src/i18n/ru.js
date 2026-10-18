@@ -9,7 +9,7 @@ export default {
     other: 'Горят *{n} лампы из {total}*',
   },
   'panel.noLightsOn': 'Свет *выключен*',
-  'panel.acTarget': 'кондиционер {target}°',
+  'panel.acTarget': 'климат {target}°',
   'panel.allRooms': 'Все',
   'panel.wholeHome': 'Весь дом',
   'panel.scopeOn': { one: 'горит {n} из {total}', few: 'горят {n} из {total}', many: 'горят {n} из {total}', other: 'горят {n} из {total}' },
@@ -27,7 +27,7 @@ export default {
   'panel.ai': 'ИИ',
 
   // Air conditioners
-  'panel.acTile': '{mode} · в комнате {temp}°',
+  'panel.acTile': '{mode} · {temp}° в комнате',
   'panel.acTooltip': '{mode} {target}°',
   'panel.room': 'В комнате',
   'panel.eco': 'Эко-режим',
