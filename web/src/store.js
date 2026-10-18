@@ -1,4 +1,4 @@
-import { post, call, isNative } from './bridge.js';
+import { post, call, isNative, isHosted, host } from './bridge.js';
 import { isLinked } from './config.js';
 
 const STORAGE_KEY = 'house-control:state:v1';
@@ -34,7 +34,9 @@ function defaultVacuum(cfg) {
   return isLinked(cfg) ? { status: 'docked', battery: null, fan: null } : { ...SIM_VACUUM };
 }
 
-export function createStore(config) {
+// `persist`: keep the state in this browser between visits. A page driven by a remote host
+// does not: its devices report their own state, and an old copy would only flash first.
+export function createStore(config, { persist: keep = !isHosted } = {}) {
   const listeners = new Set();
   const lightCfg = new Map(config.lights.map((l) => [l.id, l]));
   const acCfg = new Map(config.acs.map((a) => [a.id, a]));
@@ -51,7 +53,7 @@ export function createStore(config) {
 
   let restored = false;
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    const saved = keep ? JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') : null;
     if (saved && saved.home === config.name) {
       for (const [id, s] of Object.entries(saved.lights || {})) if (state.lights[id]) Object.assign(state.lights[id], s);
       for (const [id, s] of Object.entries(saved.acs || {})) if (state.acs[id]) Object.assign(state.acs[id], s);
@@ -74,6 +76,7 @@ export function createStore(config) {
 
   let saveTimer = 0;
   function persist() {
+    if (!keep) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       try {
@@ -103,9 +106,10 @@ export function createStore(config) {
   const outbox = new Map();
 
   function transmit(kind, id, patch) {
-    if (!isNative) return Promise.resolve();
+    if (!isNative && !isHosted) return Promise.resolve();
     const current = bucket(kind)[id];
-    const sent = call('command', { kind, id, patch, state: { ...current } });
+    const payload = { kind, id, patch, state: { ...current } };
+    const sent = isHosted ? host.command(payload) : call('command', payload);
     // Never let a lost reply block the device for good.
     return Promise.race([sent, new Promise((resolve) => setTimeout(resolve, 20000))]);
   }

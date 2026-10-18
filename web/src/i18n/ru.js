@@ -135,6 +135,7 @@ export default {
   // Driven by a remote host (see docs/remote-host.md)
   'host.offline': 'Нет связи с домом — показано последнее известное состояние',
   'host.commandFailed': 'Устройство не ответило. Попробуйте ещё раз.',
+  'host.unavailable': 'Не удалось связаться с домом. Попробуйте через минуту.',
   'host.noPlan.title': 'План дома ещё не загружен',
   'host.noPlan.body': 'Откройте House Control на Mac, где хранится план, — он загрузится автоматически.',
 };

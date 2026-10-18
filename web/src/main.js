@@ -5,7 +5,7 @@ import { createPanel } from './ui/panel.js';
 import { createAgent } from './agent/tools.js';
 import { h, openMenu } from './ui/dom.js';
 import { icon } from './ui/icons.js';
-import { isNative, isPhone, post, incoming, haptic } from './bridge.js';
+import { isNative, isPhone, isHosted, host, post, incoming, haptic } from './bridge.js';
 import { publishWidgets, runWidgetAction } from './widgets.js';
 import { i18n, t } from './i18n/index.js';
 
@@ -18,6 +18,7 @@ const STAGE_INSETS = [62, 50]; // header above, panel overlap below
 const app = document.getElementById('app');
 document.documentElement.lang = i18n.lang;
 if (isNative) document.documentElement.classList.add('native');
+if (isHosted) document.documentElement.classList.add('hosted');
 if (isPhone) document.documentElement.classList.add('ios');
 
 // ?safeTop=62&safeBottom=34 stands in for a phone's safe areas when its layout is looked at in a browser.
@@ -34,11 +35,12 @@ function safeAreaTop() {
   return top;
 }
 
-function fatal(title, error) {
+// `body`: what to do about it, when it is not the plan file's fault.
+function fatal(title, error, body = t('fatal.planBody')) {
   console.error(error);
   app.replaceChildren(h('div.fatal', h('h1', title),
-    t('fatal.planBody'),
-    h('code', String(error?.message || error))));
+    body,
+    h('code', String(error?.code || error?.message || error))));
   post('ready', { error: String(error?.message || error) });
 }
 
@@ -49,11 +51,19 @@ async function boot() {
     raw = await loadRawConfig();
     config = normalize(structuredClone(raw));
   } catch (error) {
-    fatal(t('fatal.home'), error);
+    if (error.code === 'no_plan') fatal(t('host.noPlan.title'), error, t('host.noPlan.body'));
+    else if (isHosted) fatal(t('fatal.home'), error, t('host.unavailable'));
+    else fatal(t('fatal.home'), error);
     return;
   }
 
   const store = createStore(config);
+  if (isHosted) {
+    // The devices' own state first, so a lamp that is on does not open as off and then light up.
+    host.onState = (update) => store.applyRemote(update);
+    host.onPlanChanged = () => location.reload();
+    await Promise.race([host.pollNow(), new Promise((resolve) => setTimeout(resolve, 4000))]);
+  }
   const linked = [...config.lights, ...config.acs, ...config.vacuums].some(isLinked);
   // Never invent a starting state for real hardware: it reports its own.
   if (!store.restored && !linked) {
@@ -150,6 +160,17 @@ async function boot() {
   // 'on', 'off' or 'needsApproval' (switched on, waiting to be allowed in System Settings).
   let openAtLogin = window.__HOUSE_BOOT__?.openAtLogin || 'off';
   incoming.openAtLogin = (state) => { openAtLogin = state; };
+
+  if (isHosted) {
+    host.onOffline = (off) => { if (off) panel.toast(t('host.offline')); };
+    if (host.offline) panel.toast(t('host.offline'));
+    host.start();
+    // Nobody looks at a hidden page: it asks again, at once, when it is shown.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) host.stop();
+      else { host.pollNow(); host.start(); }
+    });
+  }
 
   store.onDeviceError = (id, message) => {
     const name = store.lightCfg.get(id)?.name || store.acCfg.get(id)?.name || store.vacuumCfg.get(id)?.name || id;

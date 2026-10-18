@@ -1,5 +1,6 @@
 // Loads and normalises a floor plan ("home.json"). Everything the 3D scene and the UI
 // know about the apartment comes from this one document, so swapping the file swaps the home.
+import { host } from './bridge.js';
 
 const LIGHT_TYPES = ['ceiling', 'pendant', 'spots', 'floor', 'table', 'strip'];
 const WALLS = ['north', 'south', 'east', 'west'];
@@ -34,6 +35,8 @@ export const FLOOR_KINDS = ['oak', 'walnut', 'tile', 'stone'];
 export async function loadRawConfig() {
   const boot = window.__HOUSE_BOOT__;
   if (boot?.config) return boot.config;
+  // A remote host serves its own plan (a 404 throws an error with code 'no_plan').
+  if (host) return (await host.loadPlan()).raw;
   const plan = (boot?.plan !== 'custom' && boot?.plan) || new URLSearchParams(location.search).get('plan') || 'home';
   const res = await fetch(`./plans/${plan}.json`);
   if (!res.ok) throw new ConfigError(`Plan "${plan}" not found (HTTP ${res.status})`);

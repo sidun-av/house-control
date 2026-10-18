@@ -71,7 +71,7 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
   const tooltip = h('div.tooltip');
   const homeSub = h('div.home-sub');
   const power = h('button.round.power', { title: t('aria.everythingTitle'), 'aria-label': t('aria.everything'), onclick: toggleEverything }, icon('power', 21, 2.2));
-  const gear = h('button.round', { title: t('aria.planTitle'), 'aria-label': t('aria.plan'), onclick: () => onMenu(gear) }, icon('settings', 17));
+  const gear = h('button.round.gear', { title: t('aria.planTitle'), 'aria-label': t('aria.plan'), onclick: () => onMenu(gear) }, icon('settings', 17));
   // Shown while an AI assistant has a link to this home (AI Access on the Mac).
   const aiBadge = h('button.ai-badge', { hidden: true, title: t('aria.aiTitle'), 'aria-label': t('aria.ai'),
     onclick: () => onMenu(aiBadge, 'agent') }, icon('sparkles', 13, 2.2), h('span', t('panel.ai')));

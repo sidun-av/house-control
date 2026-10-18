@@ -494,6 +494,8 @@ html.native .card { width: auto; height: auto; box-shadow:
 .ai-badge[hidden] { display: none; }
 @keyframes ai-glow { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 .card.detail .top .ai-badge { opacity: 0; pointer-events: none; }
+/* Driven by a remote host: plans and AI Access belong to the apps, not to this page. */
+html.hosted .top .gear, html.hosted .top .ai-badge { display: none; }
 
 [hidden] { display: none !important; }
 

@@ -133,6 +133,7 @@ export default {
   // Driven by a remote host (see docs/remote-host.md)
   'host.offline': 'No connection to the home — showing the last known state',
   'host.commandFailed': 'The device did not respond. Try again.',
+  'host.unavailable': 'The home could not be reached. Try again in a minute.',
   'host.noPlan.title': 'The home plan has not been uploaded yet',
   'host.noPlan.body': 'Open House Control on the Mac that owns the plan; it uploads automatically.',
 };

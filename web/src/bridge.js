@@ -1,9 +1,22 @@
 // Thin bridge to the native shell (the macOS menu bar app or the iPhone app). In a plain
-// browser every call is a no-op, so the same bundle runs under `vite dev` too.
+// browser every call is a no-op, so the same bundle runs under `vite dev` too, unless a
+// remote host drives the page over HTTP (see host.js).
+import { createRemoteHost, hostBase } from './host.js';
 
 const handler = window.webkit?.messageHandlers?.house;
 
 export const isNative = Boolean(handler);
+
+// A remote host (boot config `host` or `?host=`) owns the devices of a page outside the
+// apps: it serves the plan, reports state and runs commands. Never inside the native shell.
+const base = handler ? null : hostBase({ boot: window.__HOUSE_BOOT__, search: new URLSearchParams(location.search) });
+export const host = base == null ? null : createRemoteHost({
+  base,
+  fetch: (...args) => window.fetch(...args),
+  setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+  clearTimeout: (id) => window.clearTimeout(id),
+});
+export const isHosted = Boolean(host) && !isNative;
 
 // 'ios' inside the iPhone app (or with ?platform=ios in a browser, to work on that layout).
 export const platform = window.__HOUSE_BOOT__?.platform
