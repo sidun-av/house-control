@@ -61,7 +61,8 @@ function acTemperatureColor(target, cfg) {
 
 export function createPanel(root, config, store, { onFocus, onMenu }) {
   const { state } = store;
-  const ui = { room: 'all', sheet: null };
+  // `unknown`: hosted, before any device has reported ('offline' or 'waiting'); null once one has.
+  const ui = { room: 'all', sheet: null, unknown: null };
   let world = null;
   const roomName = new Map(config.rooms.map((r) => [r.id, r.name]));
 
@@ -88,6 +89,14 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
     h('div.devices', grid));
   const sheet = h('section.sheet.hidden');
   sheet.inert = true;
+  // In a short frame the sheet scrolls: it says when there is more below, and when its
+  // header is pinned over what has scrolled away (style.css, html.embed).
+  const sheetScroll = () => {
+    sheet.classList.toggle('scrolled', sheet.scrollTop > 0);
+    sheet.classList.toggle('more', sheet.scrollHeight - sheet.clientHeight - sheet.scrollTop > 2);
+  };
+  sheet.addEventListener('scroll', sheetScroll, { passive: true });
+  new ResizeObserver(sheetScroll).observe(sheet);
   const toastEl = h('div.panel-toast');
 
   const clip = h('div.card-clip',
@@ -226,6 +235,11 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
         el.style.setProperty('--level', s.on ? String(s.brightness) : '0');
         // On a phone the group heading above the tile already names the room.
         sub.textContent = ui.room === 'all' && !isPhone ? t('panel.withRoom', { status: lightStatus(cfg, s), room: roomName.get(cfg.room) }) : lightStatus(cfg, s);
+        if (ui.unknown) {
+          el.classList.remove('on');
+          el.style.setProperty('--level', '0');
+          sub.textContent = t('host.noData');
+        }
       },
     };
   }
@@ -259,6 +273,11 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
         if (shownMode !== s.mode) { bubble.replaceChildren(icon(s.mode, 19)); shownMode = s.mode; }
         value.textContent = deg(s.target);
         sub.textContent = t('panel.acTile', { mode: s.on ? modeLabel(s.mode) : t('panel.off'), temp: num(s.roomTemp, isPhone ? 0 : 1) });
+        if (ui.unknown) {
+          el.classList.remove('on');
+          value.textContent = '—';
+          sub.textContent = t('host.noData');
+        }
       },
     };
   }
@@ -278,6 +297,10 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
         el.classList.toggle('on', vacuumBusy(s));
         el.style.setProperty('--c', vacuumColor(s));
         sub.textContent = ui.room === 'all' && !isPhone ? t('panel.withRoom', { status: vacuumStatus(s), room: roomName.get(cfg.room) }) : vacuumStatus(s);
+        if (ui.unknown) {
+          el.classList.remove('on');
+          sub.textContent = t('host.noData');
+        }
       },
     };
   }
@@ -321,6 +344,7 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
     ui.sheet = target;
     sheetView = target.kind === 'ac' ? acSheet(target.id) : target.kind === 'vacuum' ? vacuumSheet(target.id) : lightSheet(target.id);
     sheet.replaceChildren(...sheetView.nodes);
+    sheet.scrollTop = 0;
     panel.classList.add('hidden');
     sheet.classList.remove('hidden');
     panel.inert = true;
@@ -338,7 +362,7 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
     sheetView = null;
     sheet.classList.add('hidden');
     panel.classList.remove('hidden');
-    panel.inert = false;
+    panel.inert = Boolean(ui.unknown);
     sheet.inert = true;
     card.classList.remove('detail');
     onFocus(ui.room === 'all' ? null : { kind: 'room', id: ui.room });
@@ -642,9 +666,11 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
     homeSub.replaceChildren(
       h('span.live', { style: anyOn ? {} : { background: 'rgba(255,255,255,.25)', boxShadow: 'none' } }),
       // One line that is cut short rather than wrapped: a translation can be longer than the room for it.
-      h('span.home-line', ...rich(onCount ? t('panel.lightsOnCount', { n: onCount, total: lights.length }) : t('panel.noLightsOn')),
-        acsOn.length ? ` · ${t('panel.acTarget', { target: num(acsOn[0].target) })}` : ''));
-    power.classList.toggle('on', anyOn);
+      ui.unknown
+        ? h('span.home-line', t(ui.unknown === 'offline' ? 'host.state.offline' : 'host.state.waiting'))
+        : h('span.home-line', ...rich(onCount ? t('panel.lightsOnCount', { n: onCount, total: lights.length }) : t('panel.noLightsOn')),
+          acsOn.length ? ` · ${t('panel.acTarget', { target: num(acsOn[0].target) })}` : ''));
+    power.classList.toggle('on', anyOn && !ui.unknown);
 
     for (const [id, b] of sceneButtons) b.classList.toggle('active', state.scene === id);
 
@@ -652,15 +678,17 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
       b.classList.toggle('active', ui.room === id);
       const n = config.lights.filter((l) => (id === 'all' || l.room === id) && state.lights[l.id].on).length;
       count.textContent = n;
-      count.classList.toggle('zero', n === 0 || id === 'all');
+      count.classList.toggle('zero', n === 0 || id === 'all' || Boolean(ui.unknown));
     }
 
     const scoped = config.lights.filter(inScope);
     const scopedOn = scoped.filter((l) => state.lights[l.id].on).length;
-    listTitle.replaceChildren(h('b', ui.room === 'all' ? t('panel.wholeHome') : roomName.get(ui.room)), ` · ${t('panel.scopeOn', { n: scopedOn, total: scoped.length })}`);
+    listTitle.replaceChildren(h('b', ui.room === 'all' ? t('panel.wholeHome') : roomName.get(ui.room)),
+      ui.unknown || !scoped.length ? '' : ` · ${t(scopedOn ? 'panel.scopeOn' : 'panel.scopeNoneOn', { n: scopedOn, total: scoped.length })}`);
 
     for (const t of tiles.values()) t.update();
     sheetView?.update();
+    if (ui.sheet) sheetScroll(); // shown controls depend on what the device can do
     const m = css(mood());
     card.style.setProperty('--mood', m);
   }
@@ -685,6 +713,18 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
     get room() { return ui.room; },
     setNotch(x) { card.style.setProperty('--notch-x', `${x}px`); },
     setAgentLive(live) { aiBadge.hidden = !live; },
+    /**
+     * Hosted, until a device reports: 'offline' (the host cannot be reached) or 'waiting'
+     * (no answer yet). The tiles say nothing is known and nothing can be switched; null
+     * once the home has answered.
+     */
+    setUnknown(reason) {
+      ui.unknown = reason || null;
+      card.classList.toggle('unknown', Boolean(ui.unknown));
+      panel.inert = Boolean(ui.unknown) || Boolean(ui.sheet);
+      power.disabled = Boolean(ui.unknown);
+      update();
+    },
     /** `ai`: something an AI assistant did (who, what), instead of an error. */
     toast(text, ai = null) {
       toastEl.replaceChildren(...(ai ? [h('span.toast-ai', icon('sparkles', 13, 2.2), ai), h('span', text)] : [text]));

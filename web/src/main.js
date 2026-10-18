@@ -6,6 +6,7 @@ import { createAgent } from './agent/tools.js';
 import { h, openMenu } from './ui/dom.js';
 import { icon } from './ui/icons.js';
 import { isNative, isPhone, isHosted, host, post, incoming, haptic } from './bridge.js';
+import { reloadOnce } from './host.js';
 import { publishWidgets, runWidgetAction } from './widgets.js';
 import { i18n, t } from './i18n/index.js';
 
@@ -36,13 +37,36 @@ function safeAreaTop() {
   return top;
 }
 
-// `body`: what to do about it, when it is not the plan file's fault.
-function fatal(title, error, body = t('fatal.planBody')) {
+function fatal(title, error) {
   console.error(error);
   app.replaceChildren(h('div.fatal', h('h1', title),
-    body,
-    error?.code === 'no_plan' ? null : h('code', String(error?.code || error?.message || error))));
+    t('fatal.planBody'),
+    h('code', String(error?.message || error))));
   post('ready', { error: String(error?.message || error) });
+}
+
+// Hosted, the page cannot be reloaded by whoever looks at it (it sits in a frame), so a
+// screen that says why the home does not open tries again on its own: ever less often,
+// and at once when the page is shown again. What went wrong is for the console only.
+const RETRY = [5000, 10000, 20000, 40000, 60000];
+let retries = 0;
+let retryTimer = 0;
+let waiting = false;
+
+function hostFailed(reason, error) {
+  console.error(error);
+  app.replaceChildren(h('div.fatal.host-wait', h('h1', t(`host.${reason}.title`)), t(`host.${reason}.body`)));
+  waiting = true;
+  clearTimeout(retryTimer);
+  if (!document.hidden) retryTimer = setTimeout(boot, RETRY[Math.min(retries++, RETRY.length - 1)]);
+}
+
+if (isHosted) {
+  document.addEventListener('visibilitychange', () => {
+    if (!waiting) return;
+    clearTimeout(retryTimer);
+    if (!document.hidden) boot();
+  });
 }
 
 async function boot() {
@@ -50,19 +74,33 @@ async function boot() {
   let raw;
   try {
     raw = await loadRawConfig();
-    config = normalize(structuredClone(raw));
   } catch (error) {
-    if (error.code === 'no_plan') fatal(t('host.noPlan.title'), error, t('host.noPlan.body'));
-    else if (isHosted) fatal(t('fatal.home'), error, t('host.unavailable'));
-    else fatal(t('fatal.home'), error);
+    if (!isHosted) fatal(t('fatal.home'), error);
+    else hostFailed(error.code === 'no_plan' ? 'noPlan' : error.code === 'bad_plan' ? 'badPlan' : 'unavailable', error);
     return;
   }
+  try {
+    config = normalize(structuredClone(raw));
+  } catch (error) {
+    if (!isHosted) fatal(t('fatal.home'), error);
+    else hostFailed('badPlan', error);
+    return;
+  }
+  waiting = false;
+  clearTimeout(retryTimer);
 
   const store = createStore(config);
+  // Hosted: whether any device has reported yet. Until then the panel says it does not know,
+  // rather than show the defaults it was built with as if they were the home's.
+  let known = !isHosted;
   if (isHosted) {
     // The devices' own state first, so a lamp that is on does not open as off and then light up.
-    host.onState = (update) => store.applyRemote(update);
-    host.onPlanChanged = () => location.reload();
+    host.onState = (update) => { known = true; store.applyRemote(update); };
+    host.onPlanChanged = (version) => {
+      let storage = null;
+      try { storage = window.sessionStorage; } catch { /* blocked: no reload, see reloadOnce */ }
+      reloadOnce(version, { storage, reload: () => location.reload() });
+    };
     await Promise.race([host.pollNow(), new Promise((resolve) => setTimeout(resolve, 4000))]);
   }
   const linked = [...config.lights, ...config.acs, ...config.vacuums].some(isLinked);
@@ -89,7 +127,7 @@ async function boot() {
     world = createWorld(panel.canvas, config, store, {
       onHover: panel.showTooltip,
       onPick(target) {
-        if (!target) return;
+        if (!target || !known) return;
         if (target.kind === 'light') { haptic('light'); store.toggleLight(target.id); }
         else if (target.kind === 'ac' || target.kind === 'vacuum') panel.openSheet(target);
         else if (target.kind === 'room') panel.selectRoom(target.id);
@@ -146,7 +184,7 @@ async function boot() {
   const agent = createAgent({
     store, config, raw,
     render: (room) => renderShot(config, store, room),
-    onAction: ({ client, summary }) => { if (summary) panel.toast(summary, client || 'AI'); },
+    onAction: ({ client, summary }) => { if (summary) panel.toast(summary, client || t('panel.ai')); },
   });
   incoming.agent = async (request) => {
     store.source = request.client || 'AI'; // the other views say who made the change
@@ -163,9 +201,19 @@ async function boot() {
   incoming.openAtLogin = (state) => { openAtLogin = state; };
 
   if (isHosted) {
-    host.onOffline = (off) => { if (off) panel.toast(t('host.offline')); };
-    if (host.offline) panel.toast(t('host.offline'));
-    host.start();
+    host.onState = (update) => {
+      if (!known) { known = true; panel.setUnknown(null); }
+      store.applyRemote(update);
+    };
+    const offlineToast = () => panel.toast(t(known ? 'host.offline' : 'host.offlineUnknown'));
+    host.onOffline = (off) => {
+      if (!known) panel.setUnknown(off ? 'offline' : 'waiting');
+      if (off) offlineToast();
+    };
+    if (!known) panel.setUnknown(host.offline ? 'offline' : 'waiting');
+    if (host.offline) offlineToast();
+    // A page that starts hidden (a background tab) does not poll until it is shown.
+    if (!document.hidden) host.start();
     // Nobody looks at a hidden page: it asks again, at once, when it is shown.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) host.stop();
@@ -219,7 +267,7 @@ async function boot() {
     openMenu(panel.anchorMenu, anchor, items);
   }
 
-  const opened = window.__HOUSE_BOOT__?.openDevice || new URLSearchParams(location.search).get('device');
+  const opened = known && (window.__HOUSE_BOOT__?.openDevice || new URLSearchParams(location.search).get('device'));
   if (store.acCfg.has(opened)) panel.openSheet({ kind: 'ac', id: opened });
   else if (store.lightCfg.has(opened)) panel.openSheet({ kind: 'light', id: opened });
   else if (store.vacuumCfg.has(opened)) panel.openSheet({ kind: 'vacuum', id: opened });

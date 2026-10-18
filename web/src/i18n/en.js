@@ -9,6 +9,7 @@ export default {
   'panel.allRooms': 'All',
   'panel.wholeHome': 'Whole home',
   'panel.scopeOn': { one: '{n} of {total} on', other: '{n} of {total} on' },
+  'panel.scopeNoneOn': 'none of {total} on',
   'panel.allOn': 'All on',
   'panel.allOff': 'All off',
   'panel.noDevices': 'No devices in this room yet',
@@ -132,8 +133,16 @@ export default {
 
   // Driven by a remote host (see docs/remote-host.md)
   'host.offline': 'No connection to the home — showing the last known state',
+  'host.offlineUnknown': 'No connection to the home — the state of its devices is not known',
+  'host.state.offline': 'No connection to the home',
+  'host.state.waiting': 'Waiting for the home…',
+  'host.noData': 'Unknown',
   'host.commandFailed': 'The device did not respond. Try again.',
-  'host.unavailable': 'The home could not be reached. Try again in a minute.',
-  'host.noPlan.title': 'The home plan has not been uploaded yet',
-  'host.noPlan.body': 'Open House Control on the Mac that owns the plan; it uploads automatically.',
+  // A screen instead of the home; each one tries again by itself.
+  'host.unavailable.title': 'No connection to the home',
+  'host.unavailable.body': 'The home could not be reached. This page tries again by itself.',
+  'host.noPlan.title': 'The home plan has not been uploaded to the server yet',
+  'host.noPlan.body': 'The home opens here by itself as soon as its plan is there.',
+  'host.badPlan.title': 'The home plan could not be read',
+  'host.badPlan.body': 'The plan on the server has a mistake in it. The home opens here by itself once it is fixed.',
 };

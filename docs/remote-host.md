@@ -25,7 +25,12 @@ For example, a host serving the page under `/dash/house/` would start `index.htm
 ```
 
 Hosted, the page has no plan menu and no AI Access badge, keeps no device state in the browser, and builds the 3D
-view only after the first state answer (or 4 s), so lamps that are on do not open as off.
+view only after the first state answer (or 4 s), so lamps that are on do not open as off. Until a first answer
+comes, the tiles say the state is not known and take no taps; nothing is made up.
+
+When the page cannot open the home it says why, in the page's language: the host cannot be reached, it has no
+plan yet, or its plan cannot be read. Each of these screens tries again by itself (after 5 s, then ever less often,
+up to once a minute, and at once when the page is shown again), so a plan uploaded meanwhile simply appears.
 
 ## Endpoints
 
@@ -35,6 +40,7 @@ All bodies are JSON. Devices are named by their **plan ids** (`living.main`), ne
 
 The floor plan (the format of [floor-plan.md](floor-plan.md)), with an `ETag` header naming its version.
 `404 {"error":"no_plan"}` when the host has none yet: the page shows a "plan not uploaded yet" screen.
+A plan that is not JSON, or that the panel rejects (a duplicate id, an unknown room), gets its own screen.
 
 The page treats every device in the plan as real. A host should leave out devices it cannot drive rather than
 serve them unlinked, which would make them simulated.
@@ -59,7 +65,9 @@ The devices' state, in the shape the native shell passes to `applyRemote`, plus 
 
 Every key is optional and partial: a device or a field left out keeps what the page has. A vacuum's `status` is
 one of `cleaning`, `docked`, `returning`, `paused`, `idle`, `error`, `unavailable`. When `planVersion` differs
-from the `ETag` the page was built from, the page reloads itself to pick up the new plan.
+from the `ETag` the page was built from, the page reloads itself to pick up the new plan. A leading `W/` is
+ignored on both sides (a proxy that compresses the answer turns a strong ETag into a weak one), and a tab reloads
+at most once for any one version, so a version that never matches cannot make it reload again and again.
 
 Any answer that is not 2xx (a host answers `503 {"error":"unavailable"}` when it cannot reach the devices), or no
 answer at all, puts the page offline: it keeps the last known state and shows one "no connection" message, until
@@ -81,14 +89,17 @@ after the change, for hosts that need more than the patch:
 | `vacuum` | `status` (`cleaning`, `paused`, `returning`), `fan` |
 
 `200 {"ok":true}` when it was done. Anything else — `{"error":"<code>"}`, optionally with `"failed": ["target"]`
-naming the patch keys that were refused — rolls the change back (only the `failed` keys, when given) and shows a
-localised "the device did not respond" message. Error codes are for logs; the page does not show them. A host
+naming the patch keys that were the reason — means nothing of the command was applied: the page rolls the whole
+change back and shows a localised "the device did not respond" message. A host that refuses a command applies
+none of it. Error codes are for logs; the page does not show them. A host
 should keep its own details (and any credentials) out of these bodies.
 
 ## Polling
 
 The page asks for `/state` every 10 s while it is visible, and again 1.5 s and 5 s after each command (plus 12 s
-for a robot vacuum, which reports late). It stops while hidden and asks at once when shown again. One command per
+for a robot vacuum, which reports late). It stops while hidden and asks at once when shown again; a page that
+opens hidden (a background tab) asks once, to build the view, and then waits to be shown. An answer to a request
+made before the latest command is dropped: it may still show the device as it was. One command per
 device is in flight at a time; changes made meanwhile follow as one command, and a reply that never comes is given
 up after 20 s.
 

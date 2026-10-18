@@ -7,7 +7,8 @@
 //   then open http://localhost:5199/?host=http://localhost:5198&embed=1&lang=ru under `vite dev`
 //
 // --fail (or fail=1) answers every command with 502 {"error":"unavailable"}, to see a
-// refused change roll back. --no-plan answers as a host that has no plan yet. Editing the demo plan changes its version: open pages reload.
+// refused change roll back. --no-plan answers as a host that has no plan yet. Editing the
+// demo plan changes its version: open pages reload.
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
