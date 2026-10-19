@@ -38,6 +38,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var phoneUserCode = ""
     /// Desktop widgets and Control Center controls: what they show, what they asked for.
     private let widgets = WidgetBridge()
+    /// The native menus' and alerts' words, in the language settings.json pins (read anew each time).
+    private var text: MacStrings { MacStrings.of(plans.lang) }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMainMenu()
@@ -176,35 +178,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func statusItemClicked() {
         if NSApp.currentEvent?.type == .rightMouseUp {
             panel.hide()
+            let text = self.text
             let menu = NSMenu()
-            menu.addItem(withTitle: "Edit Home…", action: #selector(openEditor), keyEquivalent: "").target = self
-            menu.addItem(withTitle: "Load Floor Plan…", action: #selector(loadPlan), keyEquivalent: "").target = self
-            menu.addItem(withTitle: "Reveal Plan File", action: #selector(revealPlan), keyEquivalent: "").target = self
-            menu.addItem(withTitle: "Reveal Device Log", action: #selector(revealLog), keyEquivalent: "").target = self
+            menu.addItem(withTitle: text.editHome, action: #selector(openEditor), keyEquivalent: "").target = self
+            menu.addItem(withTitle: text.loadPlan, action: #selector(loadPlan), keyEquivalent: "").target = self
+            menu.addItem(withTitle: text.revealPlan, action: #selector(revealPlan), keyEquivalent: "").target = self
+            menu.addItem(withTitle: text.revealLog, action: #selector(revealLog), keyEquivalent: "").target = self
             menu.addItem(.separator())
-            let islandItem = menu.addItem(withTitle: "Show Island", action: #selector(toggleIsland), keyEquivalent: "")
+            let islandItem = menu.addItem(withTitle: text.showIsland, action: #selector(toggleIsland), keyEquivalent: "")
             islandItem.target = self
             islandItem.state = island?.isShown == true ? .on : .off
             let login = LoginItem.state
-            let loginItem = menu.addItem(withTitle: login == .needsApproval ? "Open at Login — Allow in Settings…" : "Open at Login",
+            let loginItem = menu.addItem(withTitle: login == .needsApproval ? text.openAtLoginApprove : text.openAtLogin,
                                          action: #selector(toggleOpenAtLogin), keyEquivalent: "")
             loginItem.target = self
             loginItem.state = login == .on ? .on : login == .needsApproval ? .mixed : .off
-            menu.addItem(withTitle: "Pair iPhone…", action: #selector(pairPhone), keyEquivalent: "").target = self
-            let aiItem = menu.addItem(withTitle: agent.isLive ? "AI Access — Live" : "AI Access…", action: #selector(openAgent), keyEquivalent: "")
+            menu.addItem(withTitle: text.pairPhone, action: #selector(pairPhone), keyEquivalent: "").target = self
+            let aiItem = menu.addItem(withTitle: agent.isLive ? text.aiAccessLive : text.aiAccess, action: #selector(openAgent), keyEquivalent: "")
             aiItem.target = self
             aiItem.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: nil)
             if agent.isLive {
-                menu.addItem(withTitle: "Stop AI Access", action: #selector(stopAgent), keyEquivalent: "").target = self
+                menu.addItem(withTitle: text.stopAI, action: #selector(stopAgent), keyEquivalent: "").target = self
             }
             for device in sync.connectedDevices {
-                let item = menu.addItem(withTitle: "\(device) is connected", action: nil, keyEquivalent: "")
+                let item = menu.addItem(withTitle: text.isConnected(device), action: nil, keyEquivalent: "")
                 item.image = NSImage(systemSymbolName: "iphone", accessibilityDescription: nil)
             }
             menu.addItem(.separator())
             menu.addItem(aboutMenuItem())
-            menu.addItem(withTitle: "Reload", action: #selector(reloadAll), keyEquivalent: "").target = self
-            menu.addItem(withTitle: "Quit House Control", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+            menu.addItem(withTitle: text.reload, action: #selector(reloadAll), keyEquivalent: "").target = self
+            menu.addItem(withTitle: text.quit, action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
             statusItem.menu = menu
             statusItem.button?.performClick(nil)
             statusItem.menu = nil
@@ -273,7 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.hide()
         NSApp.activate(ignoringOtherApps: true)
         let open = NSOpenPanel()
-        open.title = "Choose a floor plan"
+        open.title = text.choosePlan
         open.allowedContentTypes = [.json]
         guard open.runModal() == .OK, let url = open.url else { return }
         do {
@@ -281,7 +284,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             reloadAll()
             editor?.host.load()
         } catch {
-            alert("Could not load this floor plan", error.localizedDescription)
+            alert(text.planNotLoaded, error.localizedDescription)
         }
     }
 
@@ -292,18 +295,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// "About House Control": the version, the website and where to find the developer.
     private func aboutMenuItem() -> NSMenuItem {
+        let text = self.text
         let about = NSMenu()
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
         about.addItem(withTitle: "House Control\(version.map { " \($0)" } ?? "")", action: nil, keyEquivalent: "")
         about.addItem(.separator())
         let links: [(String, String, URL)] = [
-            ("Website", "globe", About.website),
-            ("Privacy Policy", "hand.raised", About.privacy),
-            ("Support", "questionmark.circle", About.support),
+            (text.website, "globe", About.website),
+            (text.privacy, "hand.raised", About.privacy),
+            (text.support, "questionmark.circle", About.support),
             ("", "", About.website),
-            ("\(About.developer) on X", "at", About.x),
-            ("\(About.developer) on GitHub", "chevron.left.forwardslash.chevron.right", About.github),
-            ("Source Code", "shippingbox", About.source),
+            (text.onX(About.developer), "at", About.x),
+            (text.onGitHub(About.developer), "chevron.left.forwardslash.chevron.right", About.github),
+            (text.sourceCode, "shippingbox", About.source),
         ]
         for (title, symbol, url) in links {
             guard !title.isEmpty else { about.addItem(.separator()); continue }
@@ -312,7 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.representedObject = url
             item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         }
-        let item = NSMenuItem(title: "About House Control", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: text.about, action: nil, keyEquivalent: "")
         item.submenu = about
         return item
     }
@@ -574,16 +578,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setOpenAtLogin(_ on: Bool) {
         if on, LoginItem.isTemporaryCopy {
-            alert("Move House Control to Applications first",
-                  "It is running from the disk image or from a temporary copy of the download, which is gone after a restart. "
-                  + "Drag House Control into the Applications folder, open it from there, then turn on Open at Login.")
+            alert(text.moveFirst, text.moveFirstText)
             return
         }
         do {
             try LoginItem.set(on)
         } catch {
-            alert(on ? "Could not add House Control to Login Items" : "Could not remove House Control from Login Items",
-                  "\(error.localizedDescription)\n\nYou can change it in System Settings → General → Login Items.")
+            alert(on ? text.loginAddFailed : text.loginRemoveFailed,
+                  "\(error.localizedDescription)\n\n\(text.loginChangeInSettings)")
         }
         panel.host.call("openAtLogin", LoginItem.state.rawValue)
         // The very first registration can take a moment to show in the status.
@@ -650,32 +652,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Shows the QR code an iPhone scans once to find this Mac and receive its floor plan.
     @objc private func pairPhone() {
         panel.hide()
+        let text = self.text
         let pairing = sync.enable(name: computerName)
         if pairingWindow == nil {
-            let window = QRWindowController(title: "Pair iPhone")
+            let window = QRWindowController(title: text.pairTitle)
             window.onClose = { [weak self] in self?.pairingWindow = nil }
-            window.addButton("Copy Pairing Link") { [weak self] in
+            window.addButton(text.copyPairingLink) { [weak self] in
                 guard let link = self?.sync.pairing?.link else { return }
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(link, forType: .string)
             }
-            window.addButton("Reset Pairing…") { [weak self] in self?.resetPairing() }
+            window.addButton(text.resetPairing) { [weak self] in self?.resetPairing() }
             pairingWindow = window
         }
         pairingWindow?.show(code: pairing.link,
-                            headline: "Scan with House Control on your iPhone",
-                            detail: "On the iPhone open Settings → Pair with Mac. Both devices must be on the same Wi-Fi. "
-                                + "Your floor plan, device links and connections stay the same on both, whichever one you edit; "
-                            + "they travel straight between them, encrypted with the key in this code.")
+                            headline: text.pairHeadline,
+                            detail: text.pairDetail)
         refreshPairingWindow()
     }
 
     private func resetPairing() {
+        let text = self.text
         let alert = NSAlert()
-        alert.messageText = "Reset pairing?"
-        alert.informativeText = "Every iPhone paired so far stops syncing until it scans the new code."
-        alert.addButton(withTitle: "Reset")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = text.resetQuestion
+        alert.informativeText = text.resetText
+        alert.addButton(withTitle: text.reset)
+        alert.addButton(withTitle: text.cancel)
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         sync.reset(name: computerName)
         pairPhone()
@@ -684,13 +686,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshPairingWindow() {
         let devices = sync.connectedDevices
         if !devices.isEmpty {
-            pairingWindow?.setStatus("Connected: \(devices.joined(separator: ", "))", active: true)
+            pairingWindow?.setStatus(text.connected(devices.joined(separator: ", ")), active: true)
         } else if sync.isAdvertised {
-            pairingWindow?.setStatus("Waiting for an iPhone…", active: false)
+            pairingWindow?.setStatus(text.waitingForPhone, active: false)
         } else {
             // Until macOS lets the app use the local network, no phone can find this Mac.
-            pairingWindow?.setStatus("Allow Local Network access for House Control in System Settings → Privacy & Security",
-                                     active: false)
+            pairingWindow?.setStatus(text.allowLocalNetwork, active: false)
         }
     }
 
@@ -716,43 +717,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loginWindowExpiry = expiry
         DispatchQueue.main.asyncAfter(deadline: .now() + 600, execute: expiry)
         if loginWindow == nil {
-            let window = QRWindowController(title: "Smart Life Sign-In for \(device)")
+            let window = QRWindowController(title: text.smartLifeTitle(device))
             window.onClose = { [weak self] in self?.loginWindow = nil }
             loginWindow = window
         }
         loginWindow?.show(code: content,
-                          headline: "Scan with the Smart Life app on \(device)",
-                          detail: "Switch to Smart Life on the iPhone, tap the scanner on its Home tab and confirm the login. "
-                              + "Then return to House Control: this window closes once the iPhone is signed in.")
-        loginWindow?.setStatus("Requested by \(device)", active: true)
+                          headline: text.smartLifeHeadline(device),
+                          detail: text.smartLifeDetail)
+        loginWindow?.setStatus(text.requestedBy(device), active: true)
     }
 
     // MARK: - Menu (gives the editor window the usual shortcuts)
 
     private func buildMainMenu() {
+        let text = self.text
         let main = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "Quit House Control", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: text.quit, action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         main.addItem(appItem)
 
         let editItem = NSMenuItem()
-        let edit = NSMenu(title: "Edit")
-        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
-        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        let edit = NSMenu(title: text.edit)
+        edit.addItem(withTitle: text.undo, action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: text.redo, action: Selector(("redo:")), keyEquivalent: "Z")
         edit.addItem(.separator())
-        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        edit.addItem(withTitle: text.cut, action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: text.copy, action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: text.paste, action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: text.selectAll, action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = edit
         main.addItem(editItem)
 
         let windowItem = NSMenuItem()
-        let window = NSMenu(title: "Window")
-        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
-        window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        let window = NSMenu(title: text.window)
+        window.addItem(withTitle: text.close, action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        window.addItem(withTitle: text.minimize, action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         windowItem.submenu = window
         main.addItem(windowItem)
         NSApp.mainMenu = main
