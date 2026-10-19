@@ -146,4 +146,9 @@ export default {
   'host.noPlan.body': 'The home opens here by itself as soon as its plan is there.',
   'host.badPlan.title': 'The home plan could not be read',
   'host.badPlan.body': 'The plan on the server has a mistake in it. The home opens here by itself once it is fixed.',
+
+  // The island
+  'island.acSub': '{mode} · {temp}° inside',
+  'island.scene': 'Scene',
+  'island.nOn': { one: '{n} on', other: '{n} on' },
 };

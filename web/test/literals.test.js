@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import en from '../src/i18n/en.js';
 
-const FILES = ['src/ui/panel.js', 'src/main.js', 'src/ui/dom.js'];
+const FILES = ['src/ui/panel.js', 'src/main.js', 'src/ui/dom.js', 'src/island/island.js'];
 const ALLOWED = new Set(['House Control']); // a name, the same in every language
 
 /**
@@ -60,6 +60,7 @@ const patterns = Object.entries(en).flatMap(([key, value]) => (typeof value === 
 const CODE = new Set([
   'Enter', 'Escape', // KeyboardEvent.key
   'Widget', // who made a change, for the native shell's other views
+  '(prefers-reduced-motion: reduce)', // a media query
 ]);
 const prose = (text) => {
   const plain = text.replace(/\$\{[^}]*\}/g, ' ').trim();
