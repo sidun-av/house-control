@@ -32,15 +32,19 @@ public final class HomeAssistantService: DeviceService {
     /// vacuum's battery off the vacuum entity onto a `sensor` of the same device; this is
     /// looked up once (one template request) and again when the linked entities change.
     private var batterySensors: [String: String] = [:]
+    /// The battery sensors the plan names: used as they are, no lookup (a token without admin
+    /// rights cannot ask for a template).
+    private var batteryHints: [String: String] = [:]
     /// The entities linked in the plan.
     private var linked: Set<String> = []
     /// What a change is worth a read for: the linked entities, and their vacuums' batteries.
     private var watched: Set<String> = []
     private var changePending = false
 
-    public init(vault: SecretStore) {
+    public init(vault: SecretStore, protocolClasses: [AnyClass]? = nil) {
         self.vault = vault
         let configuration = URLSessionConfiguration.ephemeral
+        if let protocolClasses { configuration.protocolClasses = protocolClasses }
         configuration.timeoutIntervalForRequest = 10
         session = URLSession(configuration: configuration)
         config = vault.read().flatMap { try? JSONDecoder().decode(Config.self, from: $0) }
@@ -93,8 +97,21 @@ public final class HomeAssistantService: DeviceService {
         if ids != linked {
             linked = ids
             batterySensors = [:]
+            seedHinted()
         }
         watched = ids.union(batterySensors.values.filter { !$0.isEmpty })
+    }
+
+    public func hintBatteries(_ sensors: [String: String]) {
+        for id in batteryHints.keys where sensors[id] == nil { batterySensors[id] = nil }
+        batteryHints = sensors
+        seedHinted()
+        watched.formUnion(sensors.values)
+    }
+
+    /// Hinted sensors stand for the lookup of the vacuums that are linked.
+    private func seedHinted() {
+        for (id, sensor) in batteryHints where linked.contains(id) { batterySensors[id] = sensor }
     }
 
     public func disconnect() {

@@ -29,6 +29,8 @@ public final class DeviceHub {
         var sensor: (service: String, id: String)?
     }
     private var serviceLinks: [String: Link] = [:]
+    /// The battery sensors the plan names for its vacuums (vacuum entity → sensor entity).
+    private var batteryHints: [String: [String: String]] = [:]
     /// Sensors from other platforms that report the room of a Smart Life AC.
     private var tuyaSensors: [String: (service: String, id: String)] = [:]
     private var refresh: Task<Void, Never>?
@@ -83,6 +85,7 @@ public final class DeviceHub {
     public func setLinks(from plan: [String: Any]?) {
         links = [:]
         serviceLinks = [:]
+        batteryHints = [:]
         tuyaSensors = [:]
         defer { watchLinks() }
         guard let plan else { return }
@@ -95,6 +98,9 @@ public final class DeviceHub {
                 if let link = device["link"] as? [String: Any], let service = link["service"] as? String,
                    let target = link["id"] as? String, !target.isEmpty {
                     serviceLinks[id] = Link(kind: DeviceKind(rawValue: kind) ?? .light, service: service, id: target, sensor: sensor)
+                    if kind == "vacuum", let battery = link["battery"] as? String, !battery.isEmpty {
+                        batteryHints[service, default: [:]][target] = battery
+                    }
                 } else if cloud != nil, kind != "vacuum", let link = device["tuya"] as? [String: Any],
                           let deviceId = link["deviceId"] as? String, !deviceId.isEmpty {
                     links[id] = (kind, link)
@@ -122,7 +128,10 @@ public final class DeviceHub {
             if let sensor = link.sensor { ids[sensor.service, default: []].insert(sensor.id) }
         }
         for sensor in tuyaSensors.values { ids[sensor.service, default: []].insert(sensor.id) }
-        for service in services { service.watch(ids[service.id] ?? []) }
+        for service in services {
+            service.hintBatteries(batteryHints[service.id] ?? [:])
+            service.watch(ids[service.id] ?? [])
+        }
     }
 
     // MARK: - Commands

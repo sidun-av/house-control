@@ -26,6 +26,10 @@ public protocol DeviceService: AnyObject {
     func send(kind: DeviceKind, id: String, patch: [String: Any], state: [String: Any]) async throws
     /// The devices linked in the plan, whose changes should reach `onChange`.
     func watch(_ ids: Set<String>)
+    /// A vacuum's battery sensor, as the plan names it (vacuum entity → sensor entity), for a
+    /// platform that cannot look it up itself (a token without admin rights). Replaces any
+    /// earlier hints.
+    func hintBatteries(_ sensors: [String: String])
     /// False for a catalog this device cannot act on (Apple Home on the Mac).
     var controlsDevices: Bool { get }
     /// Forgets the connection and its credentials.
@@ -34,6 +38,7 @@ public protocol DeviceService: AnyObject {
 
 public extension DeviceService {
     func watch(_ ids: Set<String>) {}
+    func hintBatteries(_ sensors: [String: String]) {}
     var controlsDevices: Bool { true }
 }
 

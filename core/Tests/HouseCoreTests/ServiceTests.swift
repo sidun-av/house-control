@@ -169,6 +169,18 @@ final class ServiceTests: XCTestCase {
             .vacuum?["status"] as? String, "idle")
     }
 
+    func testHomeAssistantUsesTheBatterySensorTheLinkNames() async throws {
+        StubTransport.paths = []
+        let vault = MemorySecretStore(try JSONEncoder().encode(HomeAssistantService.Config(url: "http://ha.test", token: "t")))
+        let service = HomeAssistantService(vault: vault, protocolClasses: [StubTransport.self])
+        service.hintBatteries(["vacuum.demo": "sensor.demo_battery"])
+        service.watch(["vacuum.demo"]) // the linked ids change: the hint must outlive that
+        let readings = try await service.read(["vacuum.demo"])
+        XCTAssertEqual(readings["vacuum.demo"]?.vacuum?["battery"] as? Double, 55)
+        XCTAssertFalse(StubTransport.paths.contains("/api/template"))
+        XCTAssertTrue(StubTransport.paths.contains("/api/states"))
+    }
+
     func testHomeAssistantReadsAVacuumsBatterySensor() {
         // Home Assistant 2025.8 and later: no battery_level, a battery sensor on the same device.
         let text = "vacuum.robo\tsensor.robo_battery\nvacuum.old\t\nvacuum.gone\tNone\nvacuum.last\tsensor.last_battery"
@@ -505,4 +517,24 @@ private final class FakeService: DeviceService {
     }
     func watch(_ ids: Set<String>) { watched = ids }
     func disconnect() {}
+}
+
+/// Answers Home Assistant's REST calls from memory and remembers which paths were asked.
+final class StubTransport: URLProtocol {
+    nonisolated(unsafe) static var paths: [String] = []
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let path = request.url?.path ?? ""
+        Self.paths.append(path)
+        let body = path == "/api/states"
+            ? #"[{"entity_id":"vacuum.demo","state":"docked","attributes":{}},{"entity_id":"sensor.demo_battery","state":"55","attributes":{"device_class":"battery"}}]"#
+            : ""
+        let response = HTTPURLResponse(url: request.url!, statusCode: path == "/api/states" ? 200 : 403, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }
