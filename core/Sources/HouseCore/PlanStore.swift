@@ -51,10 +51,25 @@ public final class PlanStore {
         SHA256.hash(data: data).prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 
+    private func settings() -> [String: Any] {
+        guard let data = try? Data(contentsOf: settingsURL) else { return [:] }
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
+    /// The interface language an installer pinned in settings.json ("en" or "ru"); nil leaves
+    /// the choice to the web UI.
+    public var lang: String? {
+        guard let lang = settings()["lang"] as? String, ["en", "ru"].contains(lang) else { return nil }
+        return lang
+    }
+
     public func select(_ plan: String) {
         guard Self.bundled.contains(plan) || (plan == "custom" && customPlan() != nil) else { return }
         activePlan = plan
-        let data = try? JSONSerialization.data(withJSONObject: ["plan": plan])
+        // Read-modify-write: other keys (the language, anything newer) must survive.
+        var stored = settings()
+        stored["plan"] = plan
+        let data = try? JSONSerialization.data(withJSONObject: stored)
         try? data?.write(to: settingsURL, options: .atomic)
     }
 
@@ -96,6 +111,7 @@ public final class PlanStore {
     public func bootPayload() -> [String: Any] {
         var boot: [String: Any] = ["plan": activePlan, "hasCustomPlan": hasCustomPlan]
         if activePlan == "custom", let plan = customPlan() { boot["config"] = plan }
+        if let lang { boot["lang"] = lang }
         return boot
     }
 }
