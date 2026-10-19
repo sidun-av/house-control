@@ -152,5 +152,5 @@ export default {
   // Островок
   'island.acSub': '{mode} · {temp}° в комнате',
   'island.scene': 'Сцена',
-  'island.nOn': { one: 'горит {n}', few: 'горят {n}', many: 'горит {n}', other: 'горит {n}' },
+  'island.nOn': '{n} вкл.',
 };
