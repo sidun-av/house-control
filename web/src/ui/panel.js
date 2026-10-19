@@ -269,10 +269,11 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
       update() {
         const s = state.acs[cfg.id];
         el.classList.toggle('on', s.on);
+        el.classList.toggle('idle', s.on && s.idle);
         el.style.setProperty('--c', MODE_COLORS[s.mode]);
         if (shownMode !== s.mode) { bubble.replaceChildren(icon(s.mode, 19)); shownMode = s.mode; }
         value.textContent = deg(s.target);
-        sub.textContent = t('panel.acTile', { mode: s.on ? modeLabel(s.mode) : t('panel.off'), temp: num(s.roomTemp, isPhone ? 0 : 1) });
+        sub.textContent = t('panel.acTile', { mode: !s.on ? t('panel.off') : s.idle ? t('panel.idle') : modeLabel(s.mode), temp: num(s.roomTemp, isPhone ? 0 : 1) });
         if (ui.unknown) {
           el.classList.remove('on');
           value.textContent = '—';
@@ -466,7 +467,7 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
         options.style.gridTemplateColumns = `repeat(${shown.filter(([, on]) => on).length || 1}, 1fr)`;
         powerBtn.classList.toggle('on', a.on);
         sub.replaceChildren(icon('thermo', 14), `${t('panel.room')} `, h('b', `${num(a.roomTemp, 1)}${t('panel.celsius')}`),
-          h('span.live', { style: { background: a.on ? MODE_COLORS[a.mode] : 'rgba(255,255,255,.25)', boxShadow: a.on ? `0 0 8px ${MODE_COLORS[a.mode]}` : 'none' } }));
+          h('span.live', { style: { background: a.on ? MODE_COLORS[a.mode] : 'rgba(255,255,255,.25)', boxShadow: a.on && !a.idle ? `0 0 8px ${MODE_COLORS[a.mode]}` : 'none' } }));
         big.set(a.target, !a.on);
         slider.set(a.target);
         eco.classList.toggle('on', a.eco);
@@ -623,7 +624,7 @@ export function createPanel(root, config, store, { onFocus, onMenu }) {
     } else {
       const cfg = store.acCfg.get(hit.id);
       const s = state.acs[hit.id];
-      name = cfg.name; status = s.on ? t('panel.acTooltip', { mode: modeLabel(s.mode), target: num(s.target) }) : t('panel.off'); on = s.on; color = MODE_COLORS[s.mode];
+      name = cfg.name; status = s.on ? t('panel.acTooltip', { mode: s.idle ? t('panel.idle') : modeLabel(s.mode), target: num(s.target) }) : t('panel.off'); on = s.on && !s.idle; color = MODE_COLORS[s.mode];
     }
     tooltip.replaceChildren(h('i.dot'), name, h('span', status));
     tooltip.classList.toggle('on', on);

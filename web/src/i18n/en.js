@@ -16,6 +16,7 @@ export default {
   'panel.holdHint': 'Touch and hold a light for brightness and colour',
   'panel.on': 'On',
   'panel.off': 'Off',
+  'panel.idle': 'Idle',
   'panel.percent': '{n}%',
   'panel.degrees': '{n}°',
   'panel.celsius': '°C',

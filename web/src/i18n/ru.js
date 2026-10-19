@@ -20,6 +20,7 @@ export default {
   'panel.holdHint': 'Коснитесь лампы и удерживайте, чтобы настроить яркость и цвет',
   'panel.on': 'Вкл.',
   'panel.off': 'Выкл.',
+  'panel.idle': 'Ожидание',
   'panel.percent': '{n}%',
   'panel.degrees': '{n}°',
   'panel.celsius': '°C',
