@@ -55,12 +55,30 @@ public final class PlanStore {
     private func folderChanged() {
         debounce?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self, self.customPlanRevision != self.knownRevision else { return }
-            self.knownRevision = self.customPlanRevision
+            guard let self, self.refreshFromDisk() else { return }
             self.onCustomPlanChange?()
         }
         debounce = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+    }
+
+    /// Brings the active plan in line with what is on disk; true when the home the UI shows
+    /// has to be rebuilt. Covers a plan.json that arrives after settings.json already said
+    /// "custom" (init fell back to the demo), and one that is deleted while active.
+    func refreshFromDisk() -> Bool {
+        let revision = customPlanRevision
+        let edited = revision != knownRevision
+        knownRevision = revision
+        let wanted = settings()["plan"] as? String
+        if activePlan != "custom", wanted == "custom", customPlan() != nil {
+            activePlan = "custom"
+            return true
+        }
+        if activePlan == "custom", customPlan() == nil {
+            activePlan = "home"
+            return true
+        }
+        return edited && activePlan == "custom"
     }
 
     public func customPlan() -> [String: Any]? {

@@ -43,4 +43,28 @@ final class PlanStoreLangTests: XCTestCase {
         XCTAssertEqual(json["lang"] as? String, "ru")
         XCTAssertEqual(json["other"] as? Int, 1)
     }
+
+    func testPlanArrivingAfterSettingsBecomesActive() throws {
+        write(#"{"plan":"custom","lang":"ru"}"#)
+        let store = PlanStore()
+        XCTAssertEqual(store.activePlan, "home")
+        XCTAssertFalse(store.refreshFromDisk())
+
+        let temp = folder.appendingPathComponent("plan.json.tmp")
+        try Data(#"{"name":"Demo","rooms":[]}"#.utf8).write(to: temp)
+        try FileManager.default.moveItem(at: temp, to: store.customPlanURL)
+        XCTAssertTrue(store.refreshFromDisk())
+        XCTAssertEqual(store.activePlan, "custom")
+        XCTAssertFalse(store.refreshFromDisk())
+    }
+
+    func testDeletedPlanFallsBackToTheDemo() throws {
+        write(#"{"plan":"custom"}"#)
+        try Data(#"{"name":"Demo","rooms":[]}"#.utf8).write(to: folder.appendingPathComponent("plan.json"))
+        let store = PlanStore()
+        XCTAssertEqual(store.activePlan, "custom")
+        try FileManager.default.removeItem(at: store.customPlanURL)
+        XCTAssertTrue(store.refreshFromDisk())
+        XCTAssertEqual(store.activePlan, "home")
+    }
 }

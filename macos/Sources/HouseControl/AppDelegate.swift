@@ -265,7 +265,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// plan.json was replaced behind the app's back: show the new home, as after "Load Floor Plan…".
     private func customPlanChangedOnDisk() {
-        guard plans.activePlan == "custom" else { return }
         reloadAll()
         editor?.host.load()
     }
