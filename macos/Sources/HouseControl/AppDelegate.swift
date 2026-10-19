@@ -64,6 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let adopt { self.panel.host.call("adopt", adopt) }
         }
         reloadLinks()
+        plans.onCustomPlanChange = { [weak self] in self?.customPlanChangedOnDisk() }
+        plans.startWatching()
         host.load()
         startSync()
         if islandEnabled { showIsland() }
@@ -259,6 +261,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.host.load()
         if island?.isShown == true { island?.host.load() }
         sync.broadcast()
+    }
+
+    /// plan.json was replaced behind the app's back: show the new home, as after "Load Floor Plan…".
+    private func customPlanChangedOnDisk() {
+        guard plans.activePlan == "custom" else { return }
+        reloadAll()
+        editor?.host.load()
     }
 
     @objc private func loadPlan() {

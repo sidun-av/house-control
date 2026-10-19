@@ -13,6 +13,13 @@ public final class PlanStore {
     /// "home" / "studio" for the bundled demos, or "custom" for plan.json.
     public private(set) var activePlan = "home"
 
+    /// Fired on the main queue when plan.json is replaced by something other than this store
+    /// (an installer, a sync job), once it has settled. Call `startWatching()` to arm it.
+    public var onCustomPlanChange: (() -> Void)?
+    private var watcher: DispatchSourceFileSystemObject?
+    private var debounce: DispatchWorkItem?
+    private var knownRevision: String?
+
     public init() {
         // HOUSE_DATA_DIR points the app at another folder: a throw-away one for testing or
         // screenshots leaves the real plan and the Smart Life session alone.
@@ -29,6 +36,31 @@ public final class PlanStore {
             activePlan = plan
         }
         if activePlan == "custom", customPlan() == nil { activePlan = "home" }
+    }
+
+    /// Watches the data folder rather than the file: an atomic replace (temp file + mv)
+    /// swaps the inode, which a watch on plan.json itself would lose.
+    public func startWatching() {
+        guard watcher == nil else { return }
+        let fd = open(directory.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        knownRevision = customPlanRevision
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: .write, queue: .main)
+        source.setEventHandler { [weak self] in self?.folderChanged() }
+        source.setCancelHandler { close(fd) }
+        source.resume()
+        watcher = source
+    }
+
+    private func folderChanged() {
+        debounce?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.customPlanRevision != self.knownRevision else { return }
+            self.knownRevision = self.customPlanRevision
+            self.onCustomPlanChange?()
+        }
+        debounce = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 
     public func customPlan() -> [String: Any]? {
@@ -81,6 +113,7 @@ public final class PlanStore {
     /// Stores an already serialised plan byte for byte, so its revision matches the sender's.
     public func saveCustom(data: Data, select: Bool = true) throws {
         try data.write(to: customPlanURL, options: .atomic)
+        if watcher != nil { knownRevision = customPlanRevision } // our own save is not news
         if select { self.select("custom") }
     }
 
@@ -104,6 +137,7 @@ public final class PlanStore {
     /// Forgets the user's plan and falls back to the bundled demo.
     public func removeCustom() {
         try? FileManager.default.removeItem(at: customPlanURL)
+        if watcher != nil { knownRevision = nil }
         if activePlan == "custom" { select("home") }
     }
 
